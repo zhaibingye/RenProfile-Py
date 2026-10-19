@@ -83,7 +83,10 @@ public class Fixture {
             self.assertFalse(runtime.exists(), "runtime must be removed after its worker exits")
             self.assertEqual((root / "keep.txt").read_text(), "unrelated data")
             observed = (root / "observed.txt").read_text().splitlines()
-            self.assertEqual(observed, [str(runtime / "temp"), os.environ["SystemRoot"]])
+            # PowerShell can expand an 8.3 TEMP alias such as RUNNER~1.
+            # The same filesystem location is valid under either spelling.
+            self.assertEqual([Path(path).resolve() for path in observed],
+                             [(runtime / "temp").resolve(), Path(os.environ["SystemRoot"]).resolve()])
 
     def test_packaged_exe_can_unpack_in_external_runtime_and_controller_cleans_it(self):
         executable = Path(__file__).resolve().parents[1] / EXECUTABLE_NAME

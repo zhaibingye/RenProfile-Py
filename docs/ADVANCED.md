@@ -62,9 +62,9 @@ python -B -X utf8 tools/build.py
 python -B -X utf8 -m unittest discover -s tests -v
 ```
 
-需要 Windows x64、Python 3.11+；打包需要 PyInstaller 6.17+。中间产物在系统临时目录，输出为根目录的 `RenProfile-<版本号>.exe`。
+源码需要 Windows x64、Python 3.11+。**复现当前发布版打包，请使用 Python 3.14.0（Tcl/Tk 8.6）和 PyInstaller 6.17.0**，不要直接把打包环境升级到含 Tcl/Tk 9 的 Python 版本；这套旧打包工具无法正确收集其内置的 Tcl/Tk 资源。中间产物在系统临时目录，输出为根目录的 `RenProfile-<版本号>.exe`。
 
-先打包再跑测试，可同时覆盖发布 EXE 的启动与清理；没有 EXE 时，相应测试会跳过。GitHub Actions 会在 Windows 上用 Python 3.14 构建后运行测试。它验证程序逻辑和临时文件行为，不能替代真实电脑的用户迁移验证。
+先打包再跑测试，可同时覆盖发布 EXE 的启动与清理；没有 EXE 时，相应测试会跳过。GitHub Actions 固定使用 Windows、Python 3.14.0 和上述打包工具构建后运行测试。它验证程序逻辑和临时文件行为，不能替代真实电脑的用户迁移验证。
 
 发布时同步修改 `renprofile/__init__.py` 与 `pyproject.toml` 中的版本，更新首页和版本记录。EXE 作为 GitHub Release 的附件发布，不提交到 Git 源码历史；另附 SHA-256 校验文件。运行时恢复记录、私密配置和本地凭据也不能提交。
 
