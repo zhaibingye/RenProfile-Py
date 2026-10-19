@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+*.sqlite3*
+
+# Release binaries belong in GitHub Releases, not source history.
+RenProfile*.exe
+RenProfile*.zip
+SHA256SUMS*.txt
+
+# Local secrets and actual migration/recovery data.
+.env
+.env.*
+!.env.example
+job-*/
+cleanup-*/
+runtime-*/
+plan.json
+request.json
+startup-error.txt
+*.log

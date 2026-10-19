@@ -1,0 +1,33 @@
+name: 遇到问题
+description: 告诉我们在哪一步遇到了什么提示。
+title: '[问题] '
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本
+      description: 看 EXE 文件名或窗口标题，例如 4.1.0。
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本
+      description: 例如 Windows 11 24H2；不清楚时可在“设置 → 系统 → 系统信息”查看。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 在哪一步出错？
+      description: 请说明是否已登录另一个管理员、是否手动改过文件夹名称，以及现在是否能登录原账户。
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 错误提示或本次详情
+      description: 可从“本次详情 → 复制详情”粘贴。公开前可替换个人用户名和路径；不要上传恢复数据库、用户注册表文件或个人文件。
+      render: text
+    validations:
+      required: true
