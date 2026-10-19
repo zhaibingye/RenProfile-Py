@@ -84,6 +84,9 @@ class FakeNative:
         Path(path).mkdir()
     def short_path(self, path):
         return ""
+    def clear_profile_locks(self, root, workspace, emit=lambda text: None):
+        # Transaction fixtures never terminate processes on the test machine.
+        return {"terminated": [], "remaining": [], "diagnostic": "fixture"}
 
 
 class TestHost(Host):
@@ -177,6 +180,39 @@ class TransactionTests(unittest.TestCase):
         report = Journal.read_status(self.last_job())
         self.assertEqual(report["status"], "rolled_back")
         self.assertIn("ProfileImagePath", report["failure_context"])
+
+    def test_occupants_are_released_before_loading_hives_and_again_after_a_new_lock(self):
+        real_rename = self.host.native.real.rename_directory
+        calls = []
+
+        def release(root, workspace, emit):
+            calls.append((str(root), self.registry.mount_depth))
+            return {"terminated": [], "remaining": [], "diagnostic": "fixture"}
+
+        attempts = []
+        def rename(old, new):
+            attempts.append((old, new))
+            if len(attempts) == 1:
+                raise ctypes.WinError(5)
+            real_rename(old, new)
+
+        with patch.object(self.host.native, "clear_profile_locks", side_effect=release), \
+                patch.object(self.host.native, "rename_directory", side_effect=rename):
+            result = self.migrate()
+        self.assertEqual(calls, [(str(self.old), 0), (str(self.old), 0)])
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(Journal.read_status(result["job"])["status"], "completed")
+
+    def test_repeated_denial_still_has_one_rename_intent_and_manual_fallback(self):
+        with patch.object(self.host.native, "clear_profile_locks", wraps=self.host.native.clear_profile_locks) as release, \
+                patch.object(self.host.native, "rename_directory", side_effect=ctypes.WinError(5)):
+            with self.assertRaises(ManualRenameRequired) as caught:
+                self.migrate()
+        self.assertEqual(release.call_count, 3)
+        with Journal(caught.exception.job) as journal:
+            rows = journal.db.execute("SELECT action FROM actions").fetchall()
+            self.assertEqual(sum(json.loads(raw)["kind"] == "directory" for (raw,) in rows), 1)
+        self.assert_restored()
 
     def test_required_binding_permission_failure_is_before_scan_and_move(self):
         self.registry.deny_probe = "ProfileImagePath"

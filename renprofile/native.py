@@ -120,12 +120,12 @@ class Native:
             return bool(value.value)
 
     @contextmanager
-    def privileges(self):
+    def privileges(self, names=("SeBackupPrivilege", "SeRestorePrivilege"), *, required=True):
         """Restore prior privilege state even on failure; close the token handle."""
         with self.token(0x0020 | 0x0008) as token:
             previous = []
             try:
-                for name in ("SeBackupPrivilege", "SeRestorePrivilege"):
+                for name in names:
                     state, prior, length = TOKEN_PRIVILEGES(), TOKEN_PRIVILEGES(), w.DWORD()
                     state.PrivilegeCount, state.Attributes = 1, 2
                     self.check(self.lookup(None, name, ctypes.byref(state.Luid)))
@@ -135,6 +135,8 @@ class Native:
                     error = ctypes.get_last_error()
                     if ok:
                         previous.append(prior)
+                    if error == 1300 and not required:
+                        continue  # Standard-user tests can still inspect their own children.
                     if not ok or error:
                         raise ctypes.WinError(error)
                 yield
@@ -267,6 +269,9 @@ class Native:
                 time.sleep((0.2, 0.5)[attempt])
 
     def rename_diagnostics(self, old):
+        report = getattr(self, "_last_lock_report", None)
+        if report and report[0].casefold() == str(old).casefold():
+            return report[1]["remaining"], "最近一次完整目录占用检查：" + report[1]["diagnostic"]
         from .locks import file_users
         files = [str(Path(old) / name) for name in
                  ("NTUSER.DAT", r"AppData\Local\Microsoft\Windows\UsrClass.dat")]
@@ -277,6 +282,13 @@ class Native:
             return file_users(files), "仅查询 NTUSER.DAT、UsrClass.dat；目录内其他文件的占用也可能导致失败。"
         except OSError as error:
             return [], f"占用查询未完成：{error}；不能据此排除占用。"
+
+    def clear_profile_locks(self, root, workspace, emit=lambda text: None):
+        from .occupancy import force_release
+        self._last_lock_report = None
+        result = force_release(root, workspace, emit)
+        self._last_lock_report = (str(root), result)
+        return result
 
     def junction(self, source, target):
         """Create an NTFS mount-point reparse point, avoiding cmd.exe/mklink."""

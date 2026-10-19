@@ -6,7 +6,7 @@ body:
     id: version
     attributes:
       label: 软件版本
-      description: 看 EXE 文件名或窗口标题，例如 4.1.0。
+      description: 看 EXE 文件名或窗口标题，例如 4.2.0。
     validations:
       required: true
   - type: input

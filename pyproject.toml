@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "renprofile-py"
-version = "4.1.0"
+version = "4.2.0"
 description = "Rename an offline Windows user folder and migrate its settings in one operation"
 readme = "README.md"
 license = {file = "LICENSE"}

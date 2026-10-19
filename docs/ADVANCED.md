@@ -4,9 +4,11 @@
 
 4.0 的入口、执行流程和扫描策略已重写。正常使用只需要根目录的 `RenProfile-<版本号>.exe`。
 
+4.2.0 增加默认自动清理目标目录占用。加载用户 hive 前启动独立只读查询进程，从系统句柄表查询目标目录及子目录的文件/目录句柄，并检查进程 EXE 和 DLL 映射；不再仅依赖两个配置文件的 Restart Manager 查询。只强制结束已匹配路径的进程；改名若仍返回 5/32/33，会再查询、清理并重试两次，仍失败走既有回滚及手动接续。
+
 4.1.0 增加自动改名失败后的手动继续窗口。只有目录改名返回 WinError 5/32/33、用户 hive 已卸载且日志回滚完成，才提供此入口。等待期间不保留工作线程、操作锁或 hive 挂载；用户手动改好后，点击继续会验证同一 SID、原/新路径和目录文件标识及权限，创建新任务重新扫描，再迁移设置。继续失败的回滚保留用户手动改好的目录和兼容入口。4.0.2 的目录改名失败记录也可识别；再次启动程序后选择原用户及相同新名称，可以自动接续。成功时清理本次任务和对应的自动改名失败记录。
 
-发布文件名由源码版本自动生成，例如 `RenProfile-4.1.0.exe`；Windows 文件属性中的产品版本、文件版本和原始文件名也同步写入。运行时副本保留带版本的文件名。
+发布文件名由源码版本自动生成，例如 `RenProfile-4.2.0.exe`；Windows 文件属性中的产品版本、文件版本和原始文件名也同步写入。运行时副本保留带版本的文件名。
 
 4.0.2 修复工具数据目录权限导致无法启动的问题：按访问条目的实际 SID、权限与继承范围判断，接受等价顺序及当前维护账户的专用权限；工具根目录不符合要求时自动整理其 DACL 和所有者，旧恢复记录保留。整理只针对该目录，以 MAXIMUM_ALLOWED 句柄调用 SetSecurityInfo，避免向子项传播权限；已有记录、目录内链接的外部目标和目标用户文件夹不随之重置。依据：[SetSecurityInfo 的子项传播规则](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setsecurityinfo)。
 
@@ -40,9 +42,19 @@
 
 工作进程退出后，控制进程检查准确的临时目录路径、标记及链接，再清理该目录。失败作业不会被运行时清理触碰。PowerShell 使用系统内置程序，以独立参数传递路径；执行策略参数只针对这个控制进程。
 
-这种启动方式处理工具自身占用，不会结束其他应用、注销用户或关闭系统服务。外部占用仍可能导致改名失败，错误会显示位置和可获得的占用信息。
+这种启动方式先处理工具自身占用。4.2.0 会另外强制结束已确认占用目标目录的普通进程；不会注销用户。外部受保护进程或驱动占用仍可能导致改名失败，错误会显示位置和可获得的占用信息。
 
 [PyInstaller 进程与重启说明](https://pyinstaller.org/en/stable/advanced-topics.html)。源码运行时，Python 和源码仍须位于目标用户目录之外。
+
+## 自动清理占用
+
+`occupancy.py` 通过 `NtQuerySystemInformation(SystemExtendedHandleInformation)` 获取句柄快照，动态识别文件对象类型，复制可查询的磁盘句柄到独立进程，读取最终路径后按完整目录边界匹配。不会遍历用户文件内容，也不会遍历 junction 外部目标或按路径片段模糊匹配。EXE 和 DLL 模块检查覆盖原始文件句柄已关闭的加载场景。
+
+查询子进程只读，不执行终止操作。结果逐条写入当前受保护任务目录；单轮查询最多等待 35 秒，超时结束这个查询进程，保留完整写出的结果并明确标记检查不完整。解析后删除临时查询文件；汇总记录保存在任务日志，成功时随本次日志删除。
+
+主进程用同一终止句柄重新核对 PID 的创建时间和 `IsProcessCritical`，避免 PID 复用误杀；关键系统进程、共享 `svchost.exe` 以及工具和启动链保留。不能查询关键状态或被 Windows 拒绝访问时也保留。普通占用进程直接 `TerminateProcess`，等待退出后再尝试改名；不会强关其他进程的单个文件句柄，也不安装驱动或绕过进程保护。调试权限只在查询/终止期间尝试启用，结束后恢复。
+
+这不是绝对完整的内核占用检测：访问被拒绝、查询超时、驱动占用和新出现的占用均可能残留，日志会保留查询缺口。强制终止进程不能撤销，未保存内容不属于恢复日志的恢复范围。依据：[IsProcessCritical](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-isprocesscritical)、[TerminateProcess](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess)、[最终文件路径](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfinalpathnamebyhandlew)、[phnt 句柄信息结构](https://github.com/winsiderss/phnt/blob/master/ntexapi.h)。
 
 ## 验证和打包
 

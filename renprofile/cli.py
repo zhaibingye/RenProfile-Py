@@ -34,6 +34,12 @@ def parser():
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if len(argv) == 3 and argv[0] == "--scan-locks":
+        from .occupancy import scan_worker
+        try:
+            return scan_worker(argv[1], argv[2])
+        except Exception:
+            return 1
     if not argv or argv == ["--gui"]:
         from .gui import main as gui_main
         return gui_main()

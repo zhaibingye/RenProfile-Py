@@ -105,7 +105,10 @@ class Engine(Recovery):
                 step = "检查当前用户设置"
                 try:
                     journal.set("status", "scanning")
-                    self.emit("1/3 正在重新扫描当前设置……")
+                    self.emit("1/3 正在清理目录占用并重新扫描当前设置……")
+                    step = "查找并结束目标用户文件夹的占用程序"
+                    self._release_occupants(source, job, journal)
+                    step = "扫描当前用户设置"
                     rewrite = PathRewriter(old, new, short_old)
                     with self.registry.mounted(source, hives, journal=journal):
                         actions, preserved = scan(self.registry, rewrite, hives)
@@ -126,7 +129,7 @@ class Engine(Recovery):
                         self.emit("2/3 正在修改文件夹名称……")
                         folder = Action("directory", before=old, after=new)
                         step = describe_action(folder)
-                        self._file(journal, folder, identity)
+                        self._rename(journal, folder, identity, job)
                     link = Action("junction", name=old, after=new)
                     step = describe_action(link)
                     self._file(journal, link, identity)
@@ -187,6 +190,27 @@ class Engine(Recovery):
     def _file(self, journal, action, identity):
         seq = journal.intent(action)
         self.host.transition_file(action, identity)
+        journal.mark(seq, "done")
+
+    def _release_occupants(self, root, job, journal):
+        self.emit("正在检查整个用户文件夹，强制结束相关占用程序……")
+        try:
+            report = self.host.native.clear_profile_locks(root, job, self.emit)
+            journal.set("occupancy", json.dumps(report, ensure_ascii=False))
+        except (OSError, RenProfileError) as error:
+            self.emit(f"占用检查未完成，仍会尝试改名：{error}")
+
+    def _rename(self, journal, action, identity, job):
+        seq = journal.intent(action)
+        for attempt in range(3):
+            try:
+                self.host.transition_file(action, identity)
+                break
+            except DirectoryRenameError as error:
+                if error.winerror not in (5, 32, 33) or attempt == 2:
+                    raise
+                self.emit(f"2/3 改名仍受阻，重新清理占用后重试（{attempt + 1}/2）……")
+                self._release_occupants(action.before, job, journal)
         journal.mark(seq, "done")
 
     @staticmethod
